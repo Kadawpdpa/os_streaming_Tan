@@ -23,6 +23,7 @@ cpu_switch:
 // thread ใหม่จะเริ่มที่นี่ (x19 = ฟังก์ชันที่จะรัน)
 .global thread_trampoline
 thread_trampoline:
+    msr   daifclr, #2          // เปิดรับ IRQ (thread ใหม่เริ่มมาพร้อม IRQ ที่ถูกปิด)
     blr   x19
     bl    thread_exit
     b     .

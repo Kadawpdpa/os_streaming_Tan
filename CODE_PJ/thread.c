@@ -22,12 +22,14 @@ static int nthreads = 1;
 static int current = 0;
 
 int thread_create(void (*fn)(void)) {
-    if (nthreads >= MAX_THREADS) return -1;
+    unsigned long f = irq_save();
+    if (nthreads >= MAX_THREADS) { irq_restore(f); return -1; }
     int id = nthreads++;
     threads[id].ctx.x19 = (unsigned long)fn;
     threads[id].ctx.lr  = (unsigned long)thread_trampoline;
     threads[id].ctx.sp  = (unsigned long)&stacks[id][STACK_SIZE];
     threads[id].alive   = 1;
+    irq_restore(f);
     return id;
 }
 
@@ -39,19 +41,24 @@ int threads_running(void) {
     return n;
 }
 
-// Round-robin: เลือก thread ที่ยังมีชีวิตถัดไปแล้วสลับ
+// Round-robin scheduler เรียกได้ทั้งจาก thread (คืน CPU เอง) และจาก timer IRQ (ถูกแย่ง)
 void yield(void) {
+    unsigned long f = irq_save();          // กัน IRQ ซ้อนระหว่างสลับ
     int prev = current, next = current;
     do {
         next = (next + 1) % nthreads;
     } while (!threads[next].alive && next != prev);
-    if (next == prev) return;
-    current = next;
-    cpu_switch(&threads[prev].ctx, &threads[next].ctx);
+    if (next != prev) {
+        current = next;
+        cpu_switch(&threads[prev].ctx, &threads[next].ctx);
+    }
+    irq_restore(f);                        // กลับมาถึงตรงนี้เมื่อ thread นี้ได้ CPU คืน
 }
 
 void thread_exit(void) {
+    unsigned long f = irq_save();
     threads[current].alive = 0;
+    irq_restore(f);
     yield();
     for (;;) __asm__ volatile("wfe");
 }

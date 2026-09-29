@@ -68,6 +68,12 @@ bad_entry:
 
 irq_entry:
     save_regs
+    mrs   x0, elr_el1          // เซฟที่อยู่ที่จะกลับไป + สถานะ CPU ของ thread นี้
+    mrs   x1, spsr_el1         // (thread อื่นอาจทับค่าเหล่านี้ระหว่างที่เราถูกสลับออก)
+    stp   x0, x1, [sp, #-16]!
     bl    handle_irq
+    ldp   x0, x1, [sp], #16
+    msr   elr_el1, x0
+    msr   spsr_el1, x1
     restore_regs
     eret

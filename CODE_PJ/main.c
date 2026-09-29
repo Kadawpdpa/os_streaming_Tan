@@ -9,6 +9,7 @@
 #define GICC_IAR        (*(volatile unsigned int *)0x0801000C)
 #define GICC_EOIR       (*(volatile unsigned int *)0x08010010)
 #define TIMER_IRQ       30
+#define TICKS_PER_SEC   100          // timer ขัดจังหวะทุก 10 ms = time slice
 
 extern char vectors[];
 static unsigned long tick_interval;
@@ -16,11 +17,14 @@ static unsigned long ticks;
 
 static void putc(char c) { *UART0 = c; }
 
+// puts เป็น critical section: ปิด IRQ ระหว่างพิมพ์ เพื่อไม่ให้ข้อความของหลาย thread ปนกัน
 static void puts(const char *s) {
+    unsigned long f = irq_save();
     while (*s) {
         if (*s == '\n') putc('\r');
         putc(*s++);
     }
+    irq_restore(f);
 }
 
 static void print_dec(unsigned long n) {
@@ -53,12 +57,17 @@ static void gic_init(void) {
 void handle_irq(void) {
     unsigned int iar = GICC_IAR;
     unsigned int id = iar & 0x3ff;
+    int preempt = 0;
     if (id == TIMER_IRQ) {
         timer_set(tick_interval);
         ticks++;
-        puts("tick "); print_dec(ticks); puts("\n");
+        if (ticks % TICKS_PER_SEC == 0) {
+            puts("[timer] "); print_dec(ticks / TICKS_PER_SEC); puts(" s\n");
+        }
+        preempt = 1;
     }
-    GICC_EOIR = iar;
+    GICC_EOIR = iar;               // ต้อง EOI ก่อนสลับ thread
+    if (preempt) yield();          // หมด time slice -> แย่ง CPU
 }
 
 void handle_unexpected(void) {
@@ -68,13 +77,16 @@ void handle_unexpected(void) {
     for (;;) __asm__ volatile("wfe");
 }
 
-// งานของแต่ละ thread: พิมพ์ 3 ครั้ง โดยคืน CPU ให้ thread อื่นทุกครั้ง
+// thread นี้ไม่เรียก yield() เลย: ทำงานหนักวนไป แต่ถูก timer แย่ง CPU ไปให้ thread อื่นเอง
 static void worker(void) {
     int id = thread_self();
-    for (int i = 0; i < 3; i++) {
+    for (int round = 1; round <= 5; round++) {
+        for (volatile unsigned long i = 0; i < 4000000; i++) { }   // งานหนัก ไม่ยอมคืน CPU
+        unsigned long f = irq_save();
         puts("  thread "); print_dec(id);
-        puts(" step ");    print_dec(i); puts("\n");
-        yield();
+        puts(" finished round "); print_dec(round);
+        puts(" (at tick "); print_dec(ticks); puts(")\n");
+        irq_restore(f);
     }
 }
 
@@ -83,17 +95,17 @@ void kmain(void) {
 
     __asm__ volatile("msr vbar_el1, %0\n isb" :: "r"(vectors));
     gic_init();
-    tick_interval = read_cntfrq();
+    tick_interval = read_cntfrq() / TICKS_PER_SEC;
     timer_set(tick_interval);
     timer_enable();
+
+    thread_create(worker);
+    thread_create(worker);
+    thread_create(worker);
+
+    puts("main: starting threads (preemptive)\n");
     __asm__ volatile("msr daifclr, #2");
-
-    thread_create(worker);
-    thread_create(worker);
-    thread_create(worker);
-
-    puts("main: starting threads\n");
-    while (threads_running() > 1) yield();
+    while (threads_running() > 1) __asm__ volatile("wfi");
     puts("main: all threads finished\n");
 
     for (;;) __asm__ volatile("wfi");
