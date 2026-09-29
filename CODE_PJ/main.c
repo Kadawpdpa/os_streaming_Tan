@@ -1,3 +1,5 @@
+#include "thread.h"
+
 #define UART0 ((volatile unsigned int *)0x09000000)
 
 #define GICD_CTLR       (*(volatile unsigned int *)0x08000000)
@@ -6,7 +8,7 @@
 #define GICC_PMR        (*(volatile unsigned int *)0x08010004)
 #define GICC_IAR        (*(volatile unsigned int *)0x0801000C)
 #define GICC_EOIR       (*(volatile unsigned int *)0x08010010)
-#define TIMER_IRQ       30   // physical timer (PPI 14 = INTID 30)
+#define TIMER_IRQ       30
 
 extern char vectors[];
 static unsigned long tick_interval;
@@ -42,17 +44,17 @@ static void timer_set(unsigned long t) { __asm__ volatile("msr cntp_tval_el0, %0
 static void timer_enable(void)         { __asm__ volatile("msr cntp_ctl_el0, %0" :: "r"(1UL)); }
 
 static void gic_init(void) {
-    GICD_CTLR = 1;                    // เปิด distributor
-    GICD_ISENABLER0 = 1u << TIMER_IRQ; // เปิด interrupt ของ timer
-    GICC_PMR = 0xff;                  // รับทุก priority
-    GICC_CTLR = 1;                    // เปิด CPU interface
+    GICD_CTLR = 1;
+    GICD_ISENABLER0 = 1u << TIMER_IRQ;
+    GICC_PMR = 0xff;
+    GICC_CTLR = 1;
 }
 
 void handle_irq(void) {
     unsigned int iar = GICC_IAR;
     unsigned int id = iar & 0x3ff;
     if (id == TIMER_IRQ) {
-        timer_set(tick_interval);     // ตั้งเวลารอบถัดไป
+        timer_set(tick_interval);
         ticks++;
         puts("tick "); print_dec(ticks); puts("\n");
     }
@@ -66,16 +68,33 @@ void handle_unexpected(void) {
     for (;;) __asm__ volatile("wfe");
 }
 
+// งานของแต่ละ thread: พิมพ์ 3 ครั้ง โดยคืน CPU ให้ thread อื่นทุกครั้ง
+static void worker(void) {
+    int id = thread_self();
+    for (int i = 0; i < 3; i++) {
+        puts("  thread "); print_dec(id);
+        puts(" step ");    print_dec(i); puts("\n");
+        yield();
+    }
+}
+
 void kmain(void) {
     puts("Hello from my own kernel on AArch64!\n");
 
     __asm__ volatile("msr vbar_el1, %0\n isb" :: "r"(vectors));
     gic_init();
-
-    tick_interval = read_cntfrq();    // = 1 วินาที
+    tick_interval = read_cntfrq();
     timer_set(tick_interval);
     timer_enable();
+    __asm__ volatile("msr daifclr, #2");
 
-    __asm__ volatile("msr daifclr, #2");   // เปิดรับ IRQ
+    thread_create(worker);
+    thread_create(worker);
+    thread_create(worker);
+
+    puts("main: starting threads\n");
+    while (threads_running() > 1) yield();
+    puts("main: all threads finished\n");
+
     for (;;) __asm__ volatile("wfi");
 }
