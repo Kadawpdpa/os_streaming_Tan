@@ -61,12 +61,12 @@ int net_init(void) {
     netif_set_up(&nif);
     httpd_init();
     net_ok = 1;
-    kprintf("[net]  lwIP พร้อมแล้ว IP %s, HTTP server ที่พอร์ต 80\n", OS_IP);
+    kprintf("[net]  lwIP is ready IP %s, HTTP server at port 80\n", OS_IP);
     return 0;
 }
 
 void net_get_ip(char *buf, size_t n) {
-    if (!net_ok) { ksnprintf(buf, n, "(ไม่มีเครือข่าย)"); return; }
+    if (!net_ok) { ksnprintf(buf, n, "(no network)"); return; }
     ksnprintf(buf, n, "%s", ip4addr_ntoa(netif_ip4_addr(&nif)));
 }
 
