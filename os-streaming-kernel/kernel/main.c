@@ -1,0 +1,32 @@
+#include "kernel.h"
+
+extern char vectors[];
+extern char __kernel_end[];
+void thread_init(void);
+
+void kmain(void) {
+    mmu_init();                                     /* Enable MMU + cache (identity map) */
+    kprintf("\n=== OS Streaming Kernel (AArch64) ===\n");
+    kprintf("[boot] MMU on, kernel image ends at %p\n", __kernel_end);
+
+    pmm_init();
+    kheap_init();
+    kprintf("[mm]   %lu MB free for pages, kernel heap %lu KB\n",
+            (unsigned long)(pmm_free_pages() * PAGE_SIZE >> 20), 4096UL);
+
+    __asm__ volatile("msr vbar_el1, %0\n isb" :: "r"(vectors));
+    gic_init();
+    thread_init();
+    timer_init(100);                                /* 100 Hz = time slice 10 ms */
+    kprintf("[sched] preemptive round-robin, time slice 10 ms\n");
+
+    blk_init();
+    tarfs_init();
+    net_init();
+
+    thread_create(net_thread, 0, "net");
+    thread_create(shell_thread, 0, "shell");
+
+    __asm__ volatile("msr daifclr, #2");            /* Enable IRQs */
+    for (;;) __asm__ volatile("wfi");               /* thread 0 = idle */
+}
