@@ -13,7 +13,7 @@ Browser ──HTTP──▶ [QEMU user-net] ──▶ virtio-net ──▶ lwIP 
 
 ```
 
-## 🚀 How to Run
+## How to Run
 
 If you're on Ubuntu or Arch:
 
@@ -45,7 +45,7 @@ Then just head to `http://localhost:8080/movie.mp4` to watch it.
 * `docs/PUBLIC-ACCESS.md` — How to share the stream over the internet without messing with router port forwarding (using Cloudflare Tunnel).
 * `docs/SECURITY.md` — A quick security audit of our code (what's fixed and what's left to do).
 
-## 💻 Shell Commands (Run these inside the QEMU terminal)
+## Shell Commands (Run these inside the QEMU terminal)
 
 | Command | What it does |
 | --- | --- |
@@ -61,7 +61,7 @@ Then just head to `http://localhost:8080/movie.mp4` to watch it.
 You can also test it from your host terminal:
 `curl http://localhost:8080/status` or test a range request with `curl -H "Range: bytes=0-99" http://localhost:8080/sample.mp4`
 
-## 📁 Code Structure
+## Code Structure
 
 | Folder/File | Main Purpose | OS Course Topic |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ You can also test it from your host terminal:
 | `user/` | Sample user program code. | User Space |
 | `third_party/lwip` | The TCP/IP Stack library. | – |
 
-## 🛠️ Current Status & Limitations
+## Current Status & Limitations
 
 **What works:**
 We've tested this on Ubuntu 24.04 (GCC 13 / QEMU 8.2). It boots fine, handles MMU/Cache/Timers, and can schedule 8 user processes simultaneously. The HTTP server is stable enough to serve large files and handles video seeking (Range/206/404) at around 9 MB/s with no memory leaks.
