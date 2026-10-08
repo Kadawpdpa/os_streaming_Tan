@@ -1,4 +1,3 @@
-Here is the English translation, adjusted to a friendly, peer-to-peer tone so it's easy for your friends to read without sounding too robotic or overly formal.
 
 ---
 
